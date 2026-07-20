@@ -109,3 +109,60 @@ drop trigger if exists on_performance_log_insert on public.performance_logs;
 create trigger on_performance_log_insert
   after insert on public.performance_logs
   for each row execute procedure public.update_total_points();
+
+-- TASK ACTIVITY LOGS TABLE
+create table if not exists public.task_activity_logs (
+  id uuid default gen_random_uuid() primary key,
+  task_id uuid references public.tasks(id) on delete cascade not null,
+  user_id uuid references public.profiles(id),
+  action_type text not null,
+  old_value jsonb,
+  new_value jsonb,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- RLS for task_activity_logs
+alter table public.task_activity_logs enable row level security;
+create policy "Users can view logs for tasks they are involved in"
+  on task_activity_logs for select
+  using (
+    exists (
+      select 1 from tasks 
+      where tasks.id = task_activity_logs.task_id 
+      and (tasks.assigned_by = auth.uid() or tasks.assigned_to = auth.uid())
+    )
+  );
+
+-- TRIGGER: AUTO LOG TASK ACTIVITY
+create or replace function public.log_task_activity()
+returns trigger
+language plpgsql
+security definer
+as $$
+declare
+  v_user_id uuid;
+begin
+  v_user_id := auth.uid();
+  if v_user_id is null and TG_OP = 'INSERT' then
+    v_user_id := NEW.assigned_by;
+  end if;
+
+  if TG_OP = 'INSERT' then
+    insert into public.task_activity_logs (task_id, user_id, action_type, new_value)
+    values (NEW.id, v_user_id, 'created', row_to_json(NEW)::jsonb);
+    return NEW;
+  elsif TG_OP = 'UPDATE' then
+    if row_to_json(OLD)::jsonb != row_to_json(NEW)::jsonb then
+      insert into public.task_activity_logs (task_id, user_id, action_type, old_value, new_value)
+      values (NEW.id, v_user_id, 'updated', row_to_json(OLD)::jsonb, row_to_json(NEW)::jsonb);
+    end if;
+    return NEW;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists on_task_created_or_updated on public.tasks;
+create trigger on_task_created_or_updated
+  after insert or update on public.tasks
+  for each row execute procedure public.log_task_activity();

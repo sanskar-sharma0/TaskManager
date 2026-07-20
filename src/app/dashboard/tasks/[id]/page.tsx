@@ -6,6 +6,7 @@ import { format } from 'date-fns'
 import { LiveTaskChat } from '@/components/tasks/LiveTaskChat'
 import { ExtensionControls } from '@/components/tasks/ExtensionControls'
 import { MakerCheckerControls } from '@/components/tasks/MakerCheckerControls'
+import { TaskActivityHistory } from '@/components/tasks/TaskActivityHistory'
 
 export default async function TaskDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: taskId } = await params
@@ -33,6 +34,13 @@ export default async function TaskDetailsPage({ params }: { params: Promise<{ id
     .select('*, profiles:user_id(full_name)')
     .eq('task_id', taskId)
     .order('created_at', { ascending: true })
+
+  // Fetch activity logs
+  const { data: activityLogs } = await supabase
+    .from('task_activity_logs')
+    .select('*, profiles:user_id(full_name)')
+    .eq('task_id', taskId)
+    .order('created_at', { ascending: false })
 
   const isAssignee = task.assigned_to === user.id
   const isAssigner = task.assigned_by === user.id
@@ -100,6 +108,8 @@ export default async function TaskDetailsPage({ params }: { params: Promise<{ id
               )}
             </CardContent>
           </Card>
+          
+          <TaskActivityHistory logs={activityLogs || []} />
         </div>
 
         {/* Right Column: Live Chat */}
