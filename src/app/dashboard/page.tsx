@@ -23,11 +23,11 @@ export default async function DashboardPage() {
     { data: recentTasks }
   ] = await Promise.all([
     supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('assigned_to', user.id),
-    supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('assigned_to', user.id).eq('status', 'done'),
+    supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('assigned_to', user.id).eq('status', 'completed'),
     supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('assigned_to', user.id).eq('status', 'delayed'),
     supabase.from('tasks').select('*', { count: 'exact', head: true })
       .eq('assigned_to', user.id)
-      .neq('status', 'done')
+      .neq('status', 'completed')
       .lte('deadline', next24Hours)
       .gte('deadline', now),
     supabase.from('profiles').select('total_points, full_name').eq('id', user.id).single(),

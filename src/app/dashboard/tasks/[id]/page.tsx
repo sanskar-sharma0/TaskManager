@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { format } from 'date-fns'
 import { LiveTaskChat } from '@/components/tasks/LiveTaskChat'
 import { ExtensionControls } from '@/components/tasks/ExtensionControls'
+import { MakerCheckerControls } from '@/components/tasks/MakerCheckerControls'
 
 export default async function TaskDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: taskId } = await params
@@ -36,14 +37,14 @@ export default async function TaskDetailsPage({ params }: { params: Promise<{ id
   const isAssignee = task.assigned_to === user.id
   const isAssigner = task.assigned_by === user.id
 
-  const isDelayed = new Date() > new Date(task.deadline) && task.status !== 'done'
+  const isDelayed = new Date() > new Date(task.deadline) && task.status !== 'completed'
 
   return (
     <div className="flex flex-col gap-4 p-4 md:gap-8 md:p-6 max-w-6xl mx-auto w-full">
       <div className="flex items-center justify-between">
         <h1 className="font-semibold text-lg md:text-2xl">Task Details</h1>
-        <Badge variant={task.status === 'done' ? 'default' : isDelayed ? 'destructive' : 'secondary'}>
-          {task.status.toUpperCase()}
+        <Badge variant={task.status === 'completed' ? 'default' : isDelayed ? 'destructive' : task.status === 'in_review' ? 'default' : 'secondary'}>
+          {task.status.replace('_', ' ').toUpperCase()}
         </Badge>
       </div>
 
@@ -77,7 +78,14 @@ export default async function TaskDetailsPage({ params }: { params: Promise<{ id
                 </p>
               </div>
 
-              {task.status !== 'done' && (
+              <MakerCheckerControls
+                taskId={task.id}
+                status={task.status}
+                isAssignee={isAssignee}
+                isAssigner={isAssigner}
+              />
+
+              {task.status !== 'completed' && (
                 <div className="pt-4 border-t mt-2 flex justify-between items-center">
                   <h4 className="font-medium text-sm">Time Extension</h4>
                   <ExtensionControls 

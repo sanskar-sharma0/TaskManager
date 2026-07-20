@@ -32,7 +32,7 @@ create table if not exists public.tasks (
   description text,
   assigned_by uuid references public.profiles(id) not null,
   assigned_to uuid references public.profiles(id) not null,
-  status text default 'pending' check (status in ('pending', 'done', 'delayed')),
+  status text default 'pending' check (status in ('pending', 'in_progress', 'in_review', 'completed', 'done', 'delayed')),
   deadline timestamp with time zone not null,
   completed_at timestamp with time zone,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,

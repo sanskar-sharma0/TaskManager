@@ -13,7 +13,15 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    serverActions: {
+      allowedOrigins: [
+        "b6xgk30f-3000.inc1.devtunnels.ms",
+        "*.devtunnels.ms",
+        "localhost:3000"
+      ],
+    },
+  },
 };
 
 export default withPWA(nextConfig);

@@ -60,7 +60,7 @@ export function TaskCreateForm({ users }: { users: any[] }) {
               <SelectContent>
                 {users.map(user => (
                   <SelectItem key={user.id} value={user.id}>
-                    {user.full_name || user.email}
+                    {user?.full_name || user?.email || user?.id}
                   </SelectItem>
                 ))}
               </SelectContent>

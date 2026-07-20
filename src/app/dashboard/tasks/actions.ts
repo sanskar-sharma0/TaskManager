@@ -37,43 +37,65 @@ export async function createTask(formData: FormData) {
   return { success: true }
 }
 
-export async function markTaskDone(taskId: string) {
+export async function markTaskInReview(taskId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Unauthorized' }
 
-  if (!user) {
-    return { error: 'Unauthorized' }
-  }
-
-  // Fetch the task to get its deadline
   const { data: task, error: fetchError } = await supabase
     .from('tasks')
     .select('*')
     .eq('id', taskId)
     .single()
 
-  if (fetchError || !task) {
-    return { error: 'Task not found' }
-  }
+  if (fetchError || !task) return { error: 'Task not found' }
+  if (task.assigned_to !== user.id) return { error: 'Unauthorized' }
+  if (task.status === 'completed' || task.status === 'in_review') return { error: 'Invalid state transition' }
 
-  if (task.status === 'done') {
-    return { error: 'Task is already done' }
-  }
+  const { error: updateError } = await supabase.from('tasks').update({
+    status: 'in_review'
+  }).eq('id', taskId)
+
+  if (updateError) return { error: updateError.message }
+
+  await supabase.from('task_comments').insert({
+    task_id: taskId,
+    user_id: user.id,
+    message: `✅ Task submitted for review`,
+  })
+
+  revalidatePath('/dashboard/tasks')
+  revalidatePath(`/dashboard/tasks/${taskId}`)
+  revalidatePath('/dashboard')
+  return { success: true }
+}
+
+export async function approveTask(taskId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Unauthorized' }
+
+  const { data: task, error: fetchError } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', taskId)
+    .single()
+
+  if (fetchError || !task) return { error: 'Task not found' }
+  if (task.assigned_by !== user.id) return { error: 'Unauthorized' }
+  if (task.status !== 'in_review') return { error: 'Task is not in review' }
 
   const now = new Date()
   const deadline = new Date(task.deadline)
-  let points_change = 4 // Base points for on-time completion
+  let points_change = 4
   
   if (now > deadline) {
     const delayMs = now.getTime() - deadline.getTime()
     const delayHours = Math.floor(delayMs / (1000 * 60 * 60))
     const delayDays = Math.floor(delayHours / 24)
-    
-    // Formula: -1 base penalty, -1 for every full 24 hours
     points_change = -1 - delayDays
   }
 
-  // Insert performance log (which triggers profile total_points update)
   const { error: logError } = await supabase.from('performance_logs').insert({
     user_id: task.assigned_to,
     task_id: task.id,
@@ -81,23 +103,58 @@ export async function markTaskDone(taskId: string) {
     reason: points_change > 0 ? 'Completed on time' : 'Delayed completion penalty'
   })
 
-  if (logError) {
-    return { error: logError.message }
-  }
+  if (logError) return { error: logError.message }
 
-  // Update task status
   const { error: updateError } = await supabase.from('tasks').update({
-    status: 'done',
+    status: 'completed',
     completed_at: now.toISOString()
   }).eq('id', taskId)
 
-  if (updateError) {
-    return { error: updateError.message }
-  }
+  if (updateError) return { error: updateError.message }
+
+  await supabase.from('task_comments').insert({
+    task_id: taskId,
+    user_id: user.id,
+    message: `✅ Task approved and marked as completed`,
+  })
 
   revalidatePath('/dashboard/tasks')
+  revalidatePath(`/dashboard/tasks/${taskId}`)
   revalidatePath('/dashboard')
   return { success: true, points_change }
+}
+
+export async function requestRevisions(taskId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Unauthorized' }
+
+  const { data: task, error: fetchError } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', taskId)
+    .single()
+
+  if (fetchError || !task) return { error: 'Task not found' }
+  if (task.assigned_by !== user.id) return { error: 'Unauthorized' }
+  if (task.status !== 'in_review') return { error: 'Task is not in review' }
+
+  const { error: updateError } = await supabase.from('tasks').update({
+    status: 'in_progress',
+  }).eq('id', taskId)
+
+  if (updateError) return { error: updateError.message }
+
+  await supabase.from('task_comments').insert({
+    task_id: taskId,
+    user_id: user.id,
+    message: `❌ Task needs revisions`,
+  })
+
+  revalidatePath('/dashboard/tasks')
+  revalidatePath(`/dashboard/tasks/${taskId}`)
+  revalidatePath('/dashboard')
+  return { success: true }
 }
 
 export async function requestExtension(taskId: string) {
